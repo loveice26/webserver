@@ -38,6 +38,13 @@ public:
     auto enqueue(F&& f, Args&&... args)
         -> std::future<typename std::invoke_result<F, Args...>::type>
     {
+        // 在创建任何资源前先检查
+        {
+            std::unique_lock<std::mutex> lock(queue_mutex);
+            if(stop_flag)
+                throw std::runtime_error("enqueue on stopped ThreadPool");
+        }
+
         // 通过 std::invoke_result 推断出函数 f 以及参数 args... 调用时的返回类型, 并定义一个类型别名 return_type
         using return_type = typename std::invoke_result<F, Args...>::type;
 

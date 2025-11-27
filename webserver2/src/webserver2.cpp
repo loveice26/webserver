@@ -36,7 +36,7 @@
     using SocketHandle = int;
 #endif
 
-#include "thread_pool.h"
+#include "thread_pool.hpp"
 
 /**
  * @brief 从套接字接收数据（跨平台封装）。
@@ -324,17 +324,18 @@ int main(int argc, char const *argv[]) {
     while (true) {
         std::cout << "Waiting for a connection..." << std::endl;
 
+#ifdef _WIN32
         // 接受连接
         // 这是一个阻塞调用，直到有客户端连接进来
         // 注意：addrlen 必须是 (socklen_t*) 或 (int*)，这里使用 (int*) 兼容 Winsock 和 POSIX
         if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (int*)&addrlen)) < 0) {
             // 检查接受失败的原因，并在 Windows 上进行特殊处理
-#ifdef _WIN32
             if (WSAGetLastError() == WSAEINTR) { // 被中断，重新尝试
                 continue;
             }
             std::cerr << "accept failed with error: " << WSAGetLastError() << std::endl;
 #else
+        if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
             perror("accept");
 #endif
             continue; // 接受失败，继续等待下一个连接
