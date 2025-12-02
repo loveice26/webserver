@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Mini C++ HTTP Server</title>
+</head>
+<body>
+    <h1>Hello from C++ Mini Web Server!</h1>
+
+    <p>This file is served from <b>html/index.html</b></p>
+
+    <h2>Test GET</h2>
+    <p>Open the browser developer console (F12) to inspect network requests.</p>
+
+    <h2>Test POST</h2>
+    <form method="POST" action="/post_test">
+        <label>Your Name:</label><br>
+        <input type="text" name="username"><br><br>
+
+        <label>Your Message:</label><br>
+        <input type="text" name="msg"><br><br>
+
+        <button type="submit">Send POST</button>
+    </form>
+</body>
+</html>

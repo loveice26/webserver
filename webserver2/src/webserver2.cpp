@@ -257,6 +257,7 @@ int main(int argc, char const *argv[]) {
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == (SocketHandle)-1 || server_fd == 0) {
         // 在 Windows 上 socket 失败返回 -1 (INVALID_SOCKET), 转换为 SocketHandle 会是 (SocketHandle)-1
         // 在 POSIX 上 socket 失败返回 -1
+                // 返回 0 也失败是因为在 linux 下 文件描述符 0 是留给标准输入的如果返回 0 就会导致覆盖原有的标准输入导致程序复杂或出错
 #ifdef _WIN32
         std::cerr << "socket failed with error: " << WSAGetLastError() << std::endl;
 #else
@@ -267,6 +268,22 @@ int main(int argc, char const *argv[]) {
 
     // 设置 Socket 选项，允许重用地址
     // 允许重用地址 SO_REUSEADDR (和 SO_REUSEPORT)，避免程序重启时出现 "Address already in use" 错误
+    
+        // 这段代码的作用是设置服务器套接字的选项，特别是开启 地址重用 (SO_REUSEADDR) 和 端口重用 (SO_REUSEPORT)
+    // 当服务器程序意外终止或正常关闭时，它使用的 (IP地址, 端口号) 对并不会立即从网络系统中释放。
+    // 它会进入一个名为 TIME_WAIT 的状态，这个状态通常会持续 2 MSL (Maximum Segment Lifetime，大约 1-4 分钟)。
+    //  没有 SO_REUSEADDR： 如果您在 TIME_WAIT 状态未结束前尝试重启服务器程序并再次调用 bind()，系统会拒绝，返回 "Address already in use" 错误
+    //  启用 SO_REUSEADDR： 允许您在 TIME_WAIT 状态下立即将同一个地址和端口重新绑定到新的 socket 上，从而实现快速重启服务，极大提高了开发的便利性和生产环境的容错性。
+
+    // 在高性能服务器设计中，为了利用多核 CPU 的能力和避免单个进程成为瓶颈，有时需要运行多个独立的服务器实例来监听同一个端口。
+    //  没有 SO_REUSEPORT： 传统的网络编程只允许一个 socket 绑定到特定的端口。
+    //  启用 SO_REUSEPORT： 允许多个进程/线程绑定到同一个端口，操作系统内核会负责将进入的连接 (TCP) 或数据包 (UDP) 在这些绑定了相同端口的 socket 之间负载均衡地分配，这对于构建大规模、高并发的服务器集群至关重要。
+    // 我们这里使用 SO_REUSEPORT 主要是为了如下
+    //  优化唤醒： 内核可以在多个线程之间实现更智能、更高效的连接分配，只唤醒一个最合适的线程来处理新连接，从而避免惊群。
+    //  改进负载均衡： 内核可以确保连接被均匀地分配给所有等待的线程，实现更好的负载均衡。
+    // 惊群是指 当一个新连接到达时，所有等待在 accept() 调用上的线程都会被操作系统唤醒, 调用 accept()
+    //  只有一个线程能成功接受连接，其他线程发现连接已经被取走，会立即返回继续等待 accept()。
+    //  这种不必要的唤醒和竞争会消耗 CPU 资源（如上下文切换、锁竞争），在高并发场景下会降低整体性能。
     int opt = 1;
     if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR
 #ifndef _WIN32
@@ -343,7 +360,28 @@ int main(int argc, char const *argv[]) {
 
         // 打印客户端信息 (这部分需要 arpa/inet.h，因此在 POSIX 环境下可以工作)
         // 在 Windows 上，需要使用 WSAAddressToString 或 GetNameInfo
-#ifndef _WIN32
+#ifdef _WIN32
+        char host_name[NI_MAXHOST];      // IP 地址字符串
+        char service_name[NI_MAXSERV];  // 端口号字符串
+
+        // 使用 getnameinfo 获取主机名和服务名（端口号）
+        if (getnameinfo(
+            (LPSOCKADDR)&address,
+            addrlen,
+            host_name,
+            NI_MAXHOST,
+            service_name,
+            NI_MAXSERV,
+            NI_NUMERICHOST | NI_NUMERICSERV // 标志：只返回数字形式的IP和端口
+        ) != 0) {
+            std::cerr << "getnameinfo failed with error: " << WSAGetLastError() << std::endl;
+            return EXIT_FAILURE;
+        }
+
+        // 打印客户端信息
+        // host_name 包含了 IP，service_name 包含了端口号
+        std::cout << "Connection accepted from " << host_name << ":" << service_name << std::endl;
+#else
         char client_ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &address.sin_addr, client_ip, INET_ADDRSTRLEN);
         std::cout << "Connection accepted from " << client_ip << ":" << ntohs(address.sin_port) << std::endl;

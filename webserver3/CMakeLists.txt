@@ -10,8 +10,9 @@ find_package(Threads REQUIRED)
 
 # 定义一个变量来存储所有的源文件
 set(SERVER_SOURCES
-    src/webserver2.cpp
+    src/webserver3.cpp
     src/thread_pool.cpp
+    src/HttpRequestParser.cpp
     # ... 每次添加新文件，都需要在这里手动添加 ...
 )
 
