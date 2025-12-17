@@ -39,3 +39,13 @@
 
 # debug information files
 *.dwo
+
+# IDE configs
+.idea/
+.vscode/
+
+# build
+out/
+build/
+cmake-build-debug-clang/
+cmake-build-release-clang/
